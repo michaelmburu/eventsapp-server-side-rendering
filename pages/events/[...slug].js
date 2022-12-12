@@ -1,14 +1,18 @@
 import { useRouter } from 'next/router'
-import { getFilteredEvents } from '../../dummy-data'
+import { getFilteredEvents } from '../../helpers/api-util'
+import { useSWR } from 'swr'
 import EventList from '../../components/events/event-list'
 import ResultsTitle from '../../components/events/results-title'
 import Button from '../../components/ui/button'
 import ErrorAlert from '../../components/ui/error-alert'
-const FilteredEventsPage = () => {
+const FilteredEventsPage = (props) => {
+  const { events, date } = props
+
   const router = useRouter()
 
-  const filteredData = router.query.slug
+   const filteredData = router.query.slug
 
+   const {data, error} = useSWR('https://nextjs-course-e3831-default-rtdb.firebaseio.com/events.json')
   if (!filteredData) {
     return <p className='center'>Loading..</p>
   }
@@ -18,14 +22,7 @@ const FilteredEventsPage = () => {
 
   const numYear = +filteredYear
   const numMonth = +filteredMonth
-  if (
-    isNaN(numYear) ||
-    isNaN(numMonth) ||
-    numYear > 2030 ||
-    numYear < 2021 ||
-    numMonth < 1 ||
-    numMonth > 12
-  ) {
+  if (props.hasError) {
     return (
       <div>
         <>
@@ -41,15 +38,15 @@ const FilteredEventsPage = () => {
   }
 
   //Human readable date
-  const date = new Date(numYear, numMonth - 1)
+  const filterDate = new Date(date.year, date.month - 1)
 
   //Get filtered events
-  const filteredEvents = getFilteredEvents({ year: numYear, month: numMonth })
+  const filteredEvents = events
 
   //If Filtered events are available show the,
   return filteredEvents && filteredEvents.length > 0 ? (
     <>
-      <ResultsTitle date={date} />
+      <ResultsTitle date={filterDate} />
       <EventList items={filteredEvents} />
     </>
   ) : (
@@ -63,6 +60,49 @@ const FilteredEventsPage = () => {
       </div>
     </>
   )
+}
+
+export const getServerSideProps = async (context) => {
+  const { params } = context
+  const filteredData = params.slug
+
+  const filteredYear = filteredData[0]
+  const filteredMonth = filteredData[1]
+
+  const numYear = +filteredYear
+  const numMonth = +filteredMonth
+
+  if (
+    isNaN(numYear) ||
+    isNaN(numMonth) ||
+    numYear > 2030 ||
+    numYear < 2021 ||
+    numMonth < 1 ||
+    numMonth > 12
+  ) {
+    return {
+      props: { hasError: true },
+      //notFound:true, //404 page
+      /* redirect:{
+        destination: '/error'
+      } */
+    }
+  }
+
+  const filteredEvents = await getFilteredEvents({
+    year: numYear,
+    month: numMonth,
+  })
+
+  return {
+    props: {
+      events: filteredEvents,
+      date: {
+        year: numYear,
+        month: numMonth,
+      },
+    },
+  }
 }
 
 export default FilteredEventsPage
